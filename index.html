@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>다항식 빈출 (7)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+  <style>
+    body { background-color: white; color: black; font-family: Arial, sans-serif; }
+    .hidden { display: none; }
+    .energy-bar-container { width: 100%; background-color: #ddd; height: 20px; margin: 10px 0; }
+    .energy-bar { height: 100%; background-color: black; width: 100%; }
+    .option { margin: 5px 0; padding: 5px; border: 1px solid black; background-color: white; cursor: pointer; }
+    button { margin: 5px; }
+  </style>
+</head>
+<body>
+  <!-- 시작 화면 -->
+  <div id="start-screen">
+    <h1>다항식 빈출 (7)</h1>
+    <label>이름: <input type="text" id="player-name"></label><br>
+    <label>난이도:
+      <select id="difficulty">
+        <option value="최상">최상</option>
+        <option value="상">상</option>
+        <option value="중">중</option>
+        <option value="하">하</option>
+      </select>
+    </label><br>
+    <button id="start-btn">게임 시작</button>
+  </div>
+
+  <!-- 게임 화면 -->
+  <div id="game-screen" class="hidden">
+    <div>
+      <span id="total-time">전체 시간: 0초</span> |
+      <span id="score">점수: 0</span> |
+      <span id="lives">남은 기회: 3</span>
+    </div>
+    <div class="energy-bar-container">
+      <div id="energy-bar" class="energy-bar"></div>
+    </div>
+    <div id="question-container">
+      <!-- 문제 텍스트가 여기에 표시됨 -->
+    </div>
+    <div id="options-container">
+      <!-- 보기가 여기에 표시됨 -->
+    </div>
+    <button id="submit-btn" disabled>제출</button>
+    <button id="next-btn" disabled>다음 문제</button>
+    <div id="feedback"></div>
+  </div>
+
+  <!-- 게임 종료 화면 -->
+  <div id="game-over" class="hidden">
+    <h2>게임 종료</h2>
+    <p id="final-score"></p>
+    <p id="final-time"></p>
+    <button id="send-score-btn">점수전송</button>
+    <div id="response"></div>
+  </div>
+
+  <script>
+    // 데이터 전송 함수 (서버에 점수를 전송)
+    function saveData(game, name, score, elapsedTime) {
+        const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+        const requestData = {
+            game,
+            name,
+            score: parseInt(score, 10),
+            elapsedTime: parseInt(elapsedTime, 10)
+        };
+
+        try {
+            const response = fetch(FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            response.then(res => res.json()).then(responseData => {
+                if (response.ok) {
+                    document.getElementById('response').innerText =
+                        `성공: ${JSON.stringify(responseData, null, 2)}`;
+                } else {
+                    document.getElementById('response').innerText =
+                        `오류: ${JSON.stringify(responseData, null, 2)}`;
+                }
+            }).catch(error => {
+                console.error('요청 실패:', error);
+                document.getElementById('response').innerText =
+                    `네트워크 오류: ${error.message}`;
+            });
+        } catch (error) {
+            console.error('요청 실패:', error);
+            document.getElementById('response').innerText =
+                `네트워크 오류: ${error.message}`;
+        }
+    }
+
+    // 문제 데이터 (유형별 문제 수정)
+    const questions = [
+      // [유형 A] 인수분해 – 2차식 인수 찾기
+      {
+        question: "다항식 \\((x-3y)^3-216y^3\\)를 인수분해했을 때, 두 인수 중 2차식 인수는?",
+        options: ["\\(x-9y\\)", "\\(x^2+27y^2\\)", "\\(x+6y\\)", "\\(x^2-3xy+36y^2\\)", "\\(x^2+3xy+36y^2\\)"],
+        correct: "\\(x^2+27y^2\\)"
+      },
+      {
+        question: "다항식 \\((x-4y)^3-343y^3\\)를 인수분해했을 때, 두 인수 중 2차식 인수는?",
+        options: ["\\(x-11y\\)", "\\(x^2-xy+37y^2\\)", "\\(x+7y\\)", "\\(x^2+4xy+49y^2\\)", "\\(x^2-4xy+49y^2\\)"],
+        correct: "\\(x^2-xy+37y^2\\)"
+      },
+      {
+        question: "다항식 \\((x+3y)^3-64y^3\\)를 인수분해했을 때, 두 인수 중 2차식 인수는?",
+        options: ["\\(x-y\\)", "\\(x^2+10xy+37y^2\\)", "\\(x+7y\\)", "\\(x^2+3xy+16y^2\\)", "\\(x^2-xy+16y^2\\)"],
+        correct: "\\(x^2+10xy+37y^2\\)"
+      },
+      {
+        question: "다항식 \\((x-5y)^3-512y^3\\)를 인수분해했을 때, 두 인수 중 2차식 인수는?",
+        options: ["\\(x-13y\\)", "\\(x^2-2xy+49y^2\\)", "\\(x+8y\\)", "\\(x^2+5xy+64y^2\\)", "\\(x^2-5xy+64y^2\\)"],
+        correct: "\\(x^2-2xy+49y^2\\)"
+      },
+      {
+        question: "다항식 \\((x+2y)^3-27y^3\\)를 인수분해했을 때, 두 인수 중 2차식 인수는?",
+        options: ["\\(x-y\\)", "\\(x^2+7xy+19y^2\\)", "\\(x+3y\\)", "\\(x^2+2xy+9y^2\\)", "\\(x^2-2xy+9y^2\\)"],
+        correct: "\\(x^2+7xy+19y^2\\)"
+      },
+      // [유형 B] 이차식 인수분해 – 매개변수 k 구하기
+      {
+        question: "다음 이차식 \\(x^2+kxy+8y^2-11x-32y+30\\)가 두 일차식의 곱으로 인수분해되도록 하는 자연수 \\(k\\)의 값은?",
+        options: ["1", "6", "7", "5", "8"],
+        correct: "6"
+      },
+      {
+        question: "다음 이차식 \\(x^2+kxy+6y^2-7x-17y+10\\)가 두 일차식의 곱으로 인수분해되도록 하는 자연수 \\(k\\)의 값은?",
+        options: ["3", "7", "5", "6", "8"],
+        correct: "7"
+      },
+      {
+        question: "다음 이차식 \\(x^2+kxy+6y^2-9x-23y+20\\)가 두 일차식의 곱으로 인수분해되도록 하는 자연수 \\(k\\)의 값은?",
+        options: ["4", "5", "6", "7", "8"],
+        correct: "5"
+      },
+      {
+        question: "다음 이차식 \\(x^2+kxy+12y^2-9x-29y+14\\)가 두 일차식의 곱으로 인수분해되도록 하는 자연수 \\(k\\)의 값은?",
+        options: ["5", "6", "7", "8", "9"],
+        correct: "7"
+      },
+      {
+        question: "다음 이차식 \\(x^2+kxy+10y^2-7x-23y+12\\)가 두 일차식의 곱으로 인수분해되도록 하는 자연수 \\(k\\)의 값은?",
+        options: ["2", "5", "7", "8", "9"],
+        correct: "7"
+      },
+      // [유형 C] 두 자연수의 곱으로 나타내기 – 단, a > b > 1
+      // (계산이 지나치게 복잡한 문제들은 삭제)
+      {
+        question: "두 자연수 \\(a, b\\) (\\(a > b > 1\\))가 \\(12^3+12^2-12+2\\)로 표현될 때, \\(a-b\\)의 값은?",
+        options: ["929", "912", "938", "921", "935"],
+        correct: "929"
+      },
+      {
+        question: "두 자연수 \\(a, b\\) (\\(a > b > 1\\))가 \\(10^3+10^2-10+2\\)로 표현될 때, \\(a-b\\)의 값은?",
+        options: ["69", "79", "89", "99", "109"],
+        correct: "79"
+      },
+      // [유형 D] 다항식 배수 판정 – 최대 n 구하기
+      {
+        question: "자연수 \\(n\\)에 대하여, \\(2n^4-5n^3+n^2-28n+60\\)가 \\((n-2)(n-3)\\)의 배수가 되는 \\(n\\)의 최댓값은?",
+        options: ["11", "13", "15", "17", "19"],
+        correct: "15"
+      },
+      {
+        question: "자연수 \\(n\\)에 대하여, \\(2n^4-7n^3+7n^2-7n+5\\)가 \\((n-1)(n-3)\\)의 배수가 되는 \\(n\\)의 최댓값은?",
+        options: ["11", "12", "13", "14", "15"],
+        correct: "13"
+      },
+      {
+        question: "자연수 \\(n\\)에 대하여, \\(3n^4-10n^3+6n^2-108n+224\\)가 \\((n-2)(n-4)\\)의 배수가 되는 \\(n\\)의 최댓값은?",
+        options: ["10", "11", "12", "13", "14"],
+        correct: "12"
+      },
+      {
+        question: "자연수 \\(n\\)에 대하여, \\(2n^4-8n^3+3n^2-10n+13\\)가 \\((n-1)(n-4)\\)의 배수가 되는 \\(n\\)의 최댓값은?",
+        options: ["9", "10", "11", "12", "13"],
+        correct: "11"
+      },
+      {
+        question: "자연수 \\(n\\)에 대하여, \\(2n^4-11n^3+7n^2+17n+21\\)가 \\((n-3)(n-4)\\)의 배수가 되는 \\(n\\)의 최댓값은?",
+        options: ["11", "12", "13", "14", "15"],
+        correct: "13"
+      },
+      // [유형 E] 분수식 평가 – 100으로 나눈 나머지 구하기
+      {
+        question: "다음 식 \\(A=\\dfrac{103^2-1}{101^2-1}\\times\\dfrac{101^3-1}{101^2+101+1}\\)일 때, \\(A\\)를 100으로 나눈 나머지는?",
+        options: ["2", "4", "6", "8", "10"],
+        correct: "4"
+      },
+      {
+        question: "다음 식 \\(A=\\dfrac{99^2-1}{97^2-1}\\times\\dfrac{97^3-1}{97^2+97+1}\\)일 때, \\(A\\)를 100으로 나눈 나머지는?",
+        options: ["0", "1", "2", "3", "4"],
+        correct: "0"
+      },
+      {
+        question: "다음 식 \\(A=\\dfrac{105^2-1}{103^2-1}\\times\\dfrac{103^3-1}{103^2+103+1}\\)일 때, \\(A\\)를 100으로 나눈 나머지는?",
+        options: ["4", "5", "6", "7", "8"],
+        correct: "6"
+      },
+      {
+        question: "다음 식 \\(A=\\dfrac{107^2-1}{105^2-1}\\times\\dfrac{105^3-1}{105^2+105+1}\\)일 때, \\(A\\)를 100으로 나눈 나머지는?",
+        options: ["6", "7", "8", "9", "10"],
+        correct: "8"
+      },
+      {
+        question: "다음 식 \\(A=\\dfrac{95^2-1}{93^2-1}\\times\\dfrac{93^3-1}{93^2+93+1}\\)일 때, \\(A\\)를 100으로 나눈 나머지는?",
+        options: ["86", "92", "96", "98", "100"],
+        correct: "96"
+      }
+    ];
+
+    // 게임 상태 변수
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let lives = 3;
+    let totalTime = 0;
+    let questionTimer;
+    let questionTimeLimit = 0; // 초 단위
+    let energyBarInterval;
+    let currentDifficulty = "";
+    let pointsPerQuestion = 0;
+    let gameInterval;
+    let selectedOption = null;
+
+    // 배열 섞기 함수
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+    // 문제 순서 섞기
+    shuffleArray(questions);
+
+    // HTML 요소들
+    const startScreen = document.getElementById("start-screen");
+    const gameScreen = document.getElementById("game-screen");
+    const gameOverScreen = document.getElementById("game-over");
+    const startBtn = document.getElementById("start-btn");
+    const submitBtn = document.getElementById("submit-btn");
+    const nextBtn = document.getElementById("next-btn");
+    const questionContainer = document.getElementById("question-container");
+    const optionsContainer = document.getElementById("options-container");
+    const feedbackDiv = document.getElementById("feedback");
+    const totalTimeSpan = document.getElementById("total-time");
+    const scoreSpan = document.getElementById("score");
+    const livesSpan = document.getElementById("lives");
+    const energyBar = document.getElementById("energy-bar");
+    const sendScoreBtn = document.getElementById("send-score-btn");
+    const finalScoreP = document.getElementById("final-score");
+    const finalTimeP = document.getElementById("final-time");
+
+    // 시작 버튼 이벤트
+    startBtn.addEventListener("click", function() {
+      const playerName = document.getElementById("player-name").value.trim();
+      if (!playerName) {
+        alert("이름을 입력하세요.");
+        return;
+      }
+      currentDifficulty = document.getElementById("difficulty").value;
+      if (currentDifficulty === "최상") {
+        questionTimeLimit = 20;
+        pointsPerQuestion = 20;
+      } else if (currentDifficulty === "상") {
+        questionTimeLimit = 30;
+        pointsPerQuestion = 15;
+      } else if (currentDifficulty === "중") {
+        questionTimeLimit = 40;
+        pointsPerQuestion = 13;
+      } else { // 하
+        questionTimeLimit = 0;
+        pointsPerQuestion = 10;
+      }
+      startScreen.classList.add("hidden");
+      gameScreen.classList.remove("hidden");
+      startGame();
+    });
+
+    function startGame() {
+      score = 0;
+      lives = 3;
+      totalTime = 0;
+      currentQuestionIndex = 0;
+      updateStatus();
+      loadQuestion();
+      gameInterval = setInterval(function() {
+        totalTime++;
+        totalTimeSpan.innerText = "전체 시간: " + totalTime + "초";
+      }, 1000);
+    }
+
+    function updateStatus() {
+      scoreSpan.innerText = "점수: " + score;
+      livesSpan.innerText = "남은 기회: " + lives;
+    }
+
+    function loadQuestion() {
+      clearInterval(questionTimer);
+      clearInterval(energyBarInterval);
+      feedbackDiv.innerHTML = "";
+      submitBtn.disabled = true;
+      nextBtn.disabled = true;
+      selectedOption = null;
+      // 준비된 문제가 끝나면 랜덤 선택
+      if (currentQuestionIndex >= questions.length) {
+        currentQuestionIndex = Math.floor(Math.random() * questions.length);
+      }
+      const q = questions[currentQuestionIndex];
+      // 보기를 섞음
+      let options = q.options.slice();
+      shuffleArray(options);
+      q.shuffledOptions = options;
+      q.correctIndex = options.indexOf(q.correct);
+      questionContainer.innerHTML = "<p>" + q.question + "</p>";
+      optionsContainer.innerHTML = "";
+      options.forEach((opt, index) => {
+        const btn = document.createElement("button");
+        btn.className = "option";
+        btn.innerHTML = opt;
+        btn.addEventListener("click", function() {
+          document.querySelectorAll(".option").forEach(b => b.style.border = "1px solid black");
+          btn.style.border = "2px solid black";
+          selectedOption = index;
+          submitBtn.disabled = false;
+        });
+        optionsContainer.appendChild(btn);
+      });
+      MathJax.typeset();
+      if (questionTimeLimit > 0) {
+        let timeLeft = questionTimeLimit;
+        energyBar.style.width = "100%";
+        energyBarInterval = setInterval(function() {
+          timeLeft -= 0.1;
+          let percent = (timeLeft / questionTimeLimit) * 100;
+          if (percent < 0) percent = 0;
+          energyBar.style.width = percent + "%";
+          if (timeLeft <= 0) {
+            clearInterval(energyBarInterval);
+            handleTimeout();
+          }
+        }, 100);
+        questionTimer = setTimeout(handleTimeout, questionTimeLimit * 1000);
+      } else {
+        energyBar.style.width = "100%";
+      }
+    }
+
+    function handleTimeout() {
+      if (selectedOption === null) {
+        feedbackDiv.innerHTML = "시간 초과! 정답: " + questions[currentQuestionIndex].correct;
+        lives--;
+        updateStatus();
+        submitBtn.disabled = true;
+        nextBtn.disabled = false;
+        clearInterval(questionTimer);
+        clearInterval(energyBarInterval);
+        if (lives <= 0) { endGame(); }
+      }
+    }
+
+    submitBtn.addEventListener("click", function() {
+      clearInterval(questionTimer);
+      clearInterval(energyBarInterval);
+      const q = questions[currentQuestionIndex];
+      if (selectedOption === q.correctIndex) {
+        feedbackDiv.innerHTML = "정답!";
+        score += pointsPerQuestion;
+      } else {
+        feedbackDiv.innerHTML = "오답! 정답: " + q.correct;
+        lives--;
+      }
+      updateStatus();
+      submitBtn.disabled = true;
+      nextBtn.disabled = false;
+      if (lives <= 0) { endGame(); }
+    });
+
+    nextBtn.addEventListener("click", function() {
+      currentQuestionIndex++;
+      loadQuestion();
+    });
+
+    function endGame() {
+      clearInterval(gameInterval);
+      clearInterval(questionTimer);
+      clearInterval(energyBarInterval);
+      gameScreen.classList.add("hidden");
+      gameOverScreen.classList.remove("hidden");
+      finalScoreP.innerText = "최종 점수: " + score;
+      finalTimeP.innerText = "총 게임 시간: " + totalTime + "초";
+    }
+
+    sendScoreBtn.addEventListener("click", function() {
+      const playerName = document.getElementById("player-name").value.trim();
+      saveData("다항식 빈출 (7)", playerName, score, totalTime);
+    });
+  </script>
+</body>
+</html>
